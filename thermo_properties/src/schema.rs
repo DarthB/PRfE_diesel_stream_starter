@@ -1,16 +1,16 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    molecules (id) {
-        id -> Int4,
+    molecules (molecule_id) {
+        molecule_id -> Int4,
         name -> Text,
         formula -> Text,
-        density -> Float8,
-        molar_mass -> Float8,
-        acentric_factor -> Float8,
-        melting_point -> Float8,
-        boiling_point -> Float8,
-        critical_temperature -> Float8,
-        critical_pressure -> Float8,
+        density -> Nullable<Float8>,
+        molar_mass -> Nullable<Float8>,
+        acentric_factor -> Nullable<Float8>,
+        melting_point -> Nullable<Float8>,
+        boiling_point -> Nullable<Float8>,
+        critical_temperature -> Nullable<Float8>,
+        critical_pressure -> Nullable<Float8>,
     }
 }
