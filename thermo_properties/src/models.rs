@@ -6,13 +6,18 @@
 use std::fmt::Display;
 
 use diesel::prelude::*;
+use serde::Deserialize;
+
 /// A molecule description from the thermodynamic property database.
-#[derive(Clone, Debug, Default, Queryable, Insertable, Selectable, Identifiable, AsChangeset)]
+#[derive(
+    Clone, Debug, Default, Queryable, Insertable, Selectable, Identifiable, AsChangeset, Deserialize,
+)]
 #[diesel(table_name = crate::schema::molecules)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 #[diesel(primary_key(molecule_id))]
 pub struct Molecule {
     #[diesel(skip_insertion)]
+    #[serde(skip)]
     /// todo
     pub molecule_id: i32,
 

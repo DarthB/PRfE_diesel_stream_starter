@@ -1,17 +1,21 @@
 use std::{
     error::Error,
+    fs::File,
     io::{stdin, stdout, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use clap::{Parser, Subcommand};
+use diesel::dsl::insert_into;
 use diesel::prelude::*;
+
 use models::Molecule;
 
 mod models;
 mod schema;
 
 use crate::schema::molecules;
+use crate::schema::molecules::dsl as cur_dsl;
 
 #[derive(Parser)]
 #[command(version, about, long_about=None)]
@@ -84,6 +88,44 @@ fn cmd_create(conn: &mut PgConnection, name: String, formula: String) {
         .expect("Error saving new Molecule");
 }
 
+pub fn read_molecules_from_csv<T: AsRef<Path>>(
+    file_path: T,
+    print_flag: bool,
+) -> core::result::Result<Vec<models::Molecule>, Box<dyn Error>> {
+    let file = File::open(file_path.as_ref())?;
+    let mut rdr = csv::Reader::from_reader(file);
+    let mut reval = vec![];
+    for result in rdr.deserialize() {
+        let record: models::Molecule = result?;
+        if print_flag {
+            println!("{:?}", record);
+        }
+        reval.push(record);
+    }
+    Ok(reval)
+}
+
+fn cmd_import(conn: &mut PgConnection, csv_path: PathBuf) {
+    let res = read_molecules_from_csv(csv_path.as_path(), true);
+    match res {
+        Ok(v) => {
+            // todo insert statement
+            let res = insert_into(cur_dsl::molecules).values(v).execute(conn);
+            match res {
+                Ok(num) => println!("Inserted {} rows of molecules.", num),
+                Err(e) => println!("Import to Postgres failed: {}", e.to_string()),
+            }
+        }
+        Err(err) => {
+            println!(
+                "Error importing {}: {}",
+                csv_path.clone().to_str().unwrap(),
+                err.to_string()
+            );
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "Running in {:?}",
@@ -109,7 +151,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Commands::DeleteAll => {
                         diesel::delete(molecules::table).execute(&mut conn)?;
                     }
-                    Commands::Import { csv_path } => println!("Delete not implemented"),
+                    Commands::Import { csv_path } => cmd_import(&mut conn, csv_path),
                     Commands::Quit => break,
                 }
             } else {
@@ -134,5 +176,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         };
     }
+
     Ok(())
 }
