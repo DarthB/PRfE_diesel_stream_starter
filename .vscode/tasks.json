@@ -1,0 +1,119 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cargo",
+			"command": "build",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"label": "rust: cargo build"
+		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "rust: cargo run"
+		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": [
+				"--",
+				"create",
+				"name-by-task",
+				"symbol-by-task"
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "CLI Create (a default resource)"
+		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": [
+				"--",
+				"delete-all"
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "CLI Delete ALL"
+		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": [
+				"--",
+				"import",
+				"resources/molecules.csv",
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "CLI Import"
+		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": [
+				"--",
+				"read"
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "CLI Read All Molecules"
+		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": [
+				"--",
+				"read",
+				"-f",
+				"H2O"
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "CLI Read Water"
+		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": [
+				"--",
+				"read",
+				"-f",
+				"C2H6O"
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "CLI Read Ethanol"
+		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": [
+				"--",
+				"import",
+				"-f",
+				"antoine",
+				"resources/antoine.csv",
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "CLI Import Antoine"
+		},
+	]
+}

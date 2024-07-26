@@ -1,0 +1,3 @@
+[workspace]
+members = ["thermo_properties"]
+resolver = "2"
