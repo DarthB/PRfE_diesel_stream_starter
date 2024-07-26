@@ -1,3 +1,4 @@
+#![recursion_limit = "512"]
 use std::{
     error::Error,
     fs::File,
@@ -5,18 +6,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use diesel::dsl::insert_into;
 use diesel::prelude::*;
 
-use models::Molecule;
+use models::{AntoineCoeff, ConnectionAware, Molecule};
 use schema::molecules::{formula, molecule_id};
 
 mod models;
 mod schema;
 
-use crate::schema::molecules;
-use crate::schema::molecules::dsl as cur_dsl;
+use crate::schema::antoine_coeff::dsl as antoine_dsl;
+use crate::schema::molecules as mol_db;
+use crate::schema::molecules::dsl as mol_dsl;
 
 #[derive(Parser)]
 #[command(version, about, long_about=None)]
@@ -51,10 +53,23 @@ pub enum Commands {
     DeleteAll,
 
     /// Imports information from a CSV file
-    Import { csv_path: PathBuf },
+    Import {
+        csv_path: PathBuf,
+
+        #[arg(short)]
+        format: Option<CSVFormats>,
+    },
 
     /// Exits the interactive shell
     Quit,
+}
+
+#[derive(Debug, Clone, Default, ValueEnum)]
+pub enum CSVFormats {
+    #[default]
+    Molecules,
+    Antoine,
+    NrtlBinary,
 }
 
 pub fn create_molecule<F>(
@@ -106,25 +121,76 @@ pub fn read_molecules_from_csv<T: AsRef<Path>>(
     Ok(reval)
 }
 
-fn cmd_import(conn: &mut PgConnection, csv_path: PathBuf) {
-    let res = read_molecules_from_csv(csv_path.as_path(), true);
-    match res {
-        Ok(v) => {
-            // todo insert statement
-            let res = insert_into(cur_dsl::molecules).values(v).execute(conn);
-            match res {
-                Ok(num) => println!("Inserted {} rows of molecules.", num),
-                Err(e) => println!("Import to Postgres failed: {}", e.to_string()),
-            }
+pub fn read_antoine_from_csv<T: AsRef<Path>>(
+    file_path: T,
+    print_flag: bool,
+) -> core::result::Result<Vec<models::AntoineCoeffCSV>, Box<dyn Error>> {
+    let file = File::open(file_path.as_ref())?;
+    let mut rdr = csv::Reader::from_reader(file);
+    let mut reval = vec![];
+    for result in rdr.deserialize() {
+        let record: models::AntoineCoeffCSV = result?;
+        if print_flag {
+            println!("{:?}", record);
         }
-        Err(err) => {
-            println!(
-                "Error importing {}: {}",
-                csv_path.clone().to_str().unwrap(),
-                err.to_string()
-            );
-        }
+        reval.push(record);
     }
+    Ok(reval)
+}
+
+/*
+/// error[E0275]: overflow evaluating the requirement
+fn tbl_import<T, R>(conn: &mut PgConnection, table: T, records: &Vec<R>)
+where
+    T: Table,
+    R: Insertable<T> + Sized,
+{
+    let res = insert_into(table).values(records).execute(conn);
+    match res {
+        Ok(num) => println!("Inserted {} rows of molecules.", num),
+        Err(e) => println!("Import to Postgres failed: {}", e.to_string()),
+    }
+}
+*/
+
+fn cmd_import(
+    conn: &mut PgConnection,
+    csv_path: PathBuf,
+    format: CSVFormats,
+) -> Result<(), Box<dyn Error>> {
+    match format {
+        CSVFormats::Molecules => {
+            let records = read_molecules_from_csv(csv_path.as_path(), true)?;
+            insert_into(mol_dsl::molecules)
+                .values(records)
+                .execute(conn)?;
+        }
+        CSVFormats::Antoine => {
+            let records = read_antoine_from_csv(csv_path.as_path(), true)?;
+            println!("{:?}", records);
+            let results: Vec<Result<AntoineCoeff, Box<dyn Error>>> = records
+                .into_iter()
+                .map(|e| ConnectionAware::new(e, conn).try_into())
+                .collect();
+
+            if results.iter().any(|e| e.is_err()) {
+                // todo extract errors form iterator
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("not all coefficeints from CSV could be mapped to molecules",).as_str(),
+                )));
+            }
+
+            let records: Vec<AntoineCoeff> = results.into_iter().map(|e| e.unwrap()).collect();
+
+            insert_into(antoine_dsl::antoine_coeff)
+                .values(records)
+                .execute(conn)?;
+        }
+        CSVFormats::NrtlBinary => println!("Nrtl Binary import not supported yet."),
+    }
+
+    Ok(())
 }
 
 fn cmd_read(conn: &mut PgConnection, _id: Option<i32>, _formula: Option<String>) {
@@ -133,19 +199,19 @@ fn cmd_read(conn: &mut PgConnection, _id: Option<i32>, _formula: Option<String>)
     }
 
     let results: Vec<Molecule> = if _id.is_some() {
-        cur_dsl::molecules
+        mol_dsl::molecules
             .filter(molecule_id.eq(_id.unwrap()))
             .select(crate::models::Molecule::as_select())
             .load(conn)
             .expect("ERR")
     } else if _formula.is_some() {
-        cur_dsl::molecules
+        mol_dsl::molecules
             .filter(formula.eq(_formula.unwrap()))
             .select(crate::models::Molecule::as_select())
             .load(conn)
             .expect("ERR")
     } else {
-        cur_dsl::molecules
+        mol_dsl::molecules
             .select(crate::models::Molecule::as_select())
             .load(conn)
             .expect("Error loading molecules.")
@@ -184,9 +250,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Commands::Update => println!("Update not implemented"),
                     Commands::Delete => println!("Delete not implemented"),
                     Commands::DeleteAll => {
-                        diesel::delete(molecules::table).execute(&mut conn)?;
+                        diesel::delete(mol_db::table).execute(&mut conn)?;
                     }
-                    Commands::Import { csv_path } => cmd_import(&mut conn, csv_path),
+                    Commands::Import { csv_path, format } => {
+                        cmd_import(&mut conn, csv_path, format.unwrap_or(CSVFormats::Molecules))?;
+                    }
+
                     Commands::Quit => break,
                 }
             } else {
