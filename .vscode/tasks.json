@@ -115,5 +115,19 @@
 			],
 			"label": "CLI Import Antoine"
 		},
+		{
+			"type": "cargo",
+			"command": "run",
+			"args": [
+				"--",
+				"antoine",
+				"Ethanol",
+				"78.32",
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "CLI Calculate Antoine from DB"
+		}
 	]
 }

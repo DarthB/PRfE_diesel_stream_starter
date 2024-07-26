@@ -16,9 +16,10 @@ use schema::molecules::{formula, molecule_id};
 mod models;
 mod schema;
 
-use crate::schema::antoine_coeff::dsl as antoine_dsl;
+use crate::schema::antoine_coeff as antoine_db;
 use crate::schema::molecules as mol_db;
-use crate::schema::molecules::dsl as mol_dsl;
+use antoine_db::dsl as antoine_dsl;
+use mol_db::dsl as mol_dsl;
 
 #[derive(Parser)]
 #[command(version, about, long_about=None)]
@@ -29,6 +30,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Calculates the antoine equation
+    Antoine { name: String, temperature: f64 },
+
     /// creates a new molecule
     Create { name: String, comp_formula: String },
 
@@ -64,12 +68,46 @@ pub enum Commands {
     Quit,
 }
 
+/// Returns the partial pressore of a molecule by using the antoine equation.
+///
+/// See the [Wikipedia Article](https://en.wikipedia.org/wiki/Antoine_equation) for more details.
+///
+/// # Arguments
+///
+/// * `temp` - The temperature in degree Kelvin
+/// * `a` - A molecule specific coefficient
+/// * `b` - Another molecule specific coefficient
+/// * `c` - This molecule specific coefficient may be given in degree Celsius or degree Kelvin, so be cautious when searching for property data, here we use degree Kelvin
+///
+pub fn antoine(temp: f64, a: f64, b: f64, c: f64) -> f64 {
+    a - (b / (c + temp))
+}
+
 #[derive(Debug, Clone, Default, ValueEnum)]
 pub enum CSVFormats {
     #[default]
     Molecules,
     Antoine,
     NrtlBinary,
+}
+
+pub fn read_antoine_coeff(
+    mol_name: &str,
+    temperature: f64,
+    conn: &mut PgConnection,
+) -> Result<Vec<AntoineCoeff>, Box<dyn Error>> {
+    let res = antoine_dsl::antoine_coeff
+        .inner_join(mol_dsl::molecules)
+        .filter(mol_db::name.eq(mol_name))
+        .filter(
+            antoine_db::min_temp
+                .le(temperature)
+                .and(antoine_db::max_temp.ge(temperature)),
+        )
+        .select(AntoineCoeff::as_select())
+        .load(conn)?;
+
+    Ok(res)
 }
 
 pub fn create_molecule<F>(
@@ -223,6 +261,26 @@ fn cmd_read(conn: &mut PgConnection, _id: Option<i32>, _formula: Option<String>)
     }
 }
 
+fn cmd_antoine(name: &str, temperature: f64, conn: &mut PgConnection) {
+    let res = read_antoine_coeff(name, temperature, conn);
+    if let Ok(coefficients) = res {
+        if coefficients.len() != 0 {
+            println!("Calculate Antoine for #{} datasets", coefficients.len());
+            for (idx, coeff) in coefficients.iter().enumerate() {
+                println!(
+                    "p={} --- for dataset #{} valid in {}<=T<={}",
+                    antoine(temperature, coeff.a, coeff.b, coeff.c),
+                    idx + 1,
+                    coeff.min_temp,
+                    coeff.max_temp,
+                )
+            }
+        } else {
+            println!("No datasets found for '{}' at {} degree", name, temperature);
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "Running in {:?}",
@@ -241,6 +299,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         if let Some(cli) = cli {
             if let Some(cmd) = cli.command {
                 match cmd {
+                    Commands::Antoine { name, temperature } => {
+                        cmd_antoine(name.as_str(), temperature, &mut conn)
+                    }
                     Commands::Create { name, comp_formula } => {
                         cmd_create(&mut conn, name, comp_formula)
                     }
