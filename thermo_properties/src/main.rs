@@ -10,6 +10,7 @@ use diesel::dsl::insert_into;
 use diesel::prelude::*;
 
 use models::Molecule;
+use schema::molecules::{formula, molecule_id};
 
 mod models;
 mod schema;
@@ -27,17 +28,17 @@ struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// creates a new molecule
-    Create { name: String, formula: String },
+    Create { name: String, comp_formula: String },
 
     /// reads a specific or all molecules
     Read {
         /// reads a molecule by ID, is prefered over formula
-        #[arg(short, conflicts_with = "formula")]
+        #[arg(short, conflicts_with = "search_formula")]
         id: Option<i32>,
 
         /// reads a molecule by it's formula
         #[arg(short, conflicts_with = "id")]
-        formula: Option<String>,
+        search_formula: Option<String>,
     },
 
     /// not implemented yet
@@ -58,14 +59,14 @@ pub enum Commands {
 
 pub fn create_molecule<F>(
     conn: &mut PgConnection,
-    formula: String,
+    symbol_formula: String,
     name: String,
     mutator: F,
 ) -> Molecule
 where
     F: Fn(&mut Molecule),
 {
-    let mut new_mol = models::Molecule::new(name, formula);
+    let mut new_mol = models::Molecule::new(name, symbol_formula);
     mutator(&mut new_mol);
 
     diesel::insert_into(schema::molecules::table)
@@ -75,8 +76,8 @@ where
         .expect("Error saving new Molecule")
 }
 
-fn cmd_create(conn: &mut PgConnection, name: String, formula: String) {
-    let new_mol = models::Molecule::new_with_mut(name, formula, |m| {
+fn cmd_create(conn: &mut PgConnection, name: String, symbol_formula: String) {
+    let new_mol = models::Molecule::new_with_mut(name, symbol_formula, |m| {
         // just an example how we can adapt the data
         m.boiling_point = Some(100.0);
     });
@@ -126,6 +127,36 @@ fn cmd_import(conn: &mut PgConnection, csv_path: PathBuf) {
     }
 }
 
+fn cmd_read(conn: &mut PgConnection, _id: Option<i32>, _formula: Option<String>) {
+    if _id.is_some() && _formula.is_some() {
+        panic!("That should never happen.");
+    }
+
+    let results: Vec<Molecule> = if _id.is_some() {
+        cur_dsl::molecules
+            .filter(molecule_id.eq(_id.unwrap()))
+            .select(crate::models::Molecule::as_select())
+            .load(conn)
+            .expect("ERR")
+    } else if _formula.is_some() {
+        cur_dsl::molecules
+            .filter(formula.eq(_formula.unwrap()))
+            .select(crate::models::Molecule::as_select())
+            .load(conn)
+            .expect("ERR")
+    } else {
+        cur_dsl::molecules
+            .select(crate::models::Molecule::as_select())
+            .load(conn)
+            .expect("Error loading molecules.")
+    };
+
+    println!("Displaying {}. Molecules:", results.len());
+    for molecule in results {
+        println!("{}", molecule);
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     println!(
         "Running in {:?}",
@@ -144,8 +175,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         if let Some(cli) = cli {
             if let Some(cmd) = cli.command {
                 match cmd {
-                    Commands::Create { name, formula } => cmd_create(&mut conn, name, formula),
-                    Commands::Read { id, formula } => println!("Delete not implemented"),
+                    Commands::Create { name, comp_formula } => {
+                        cmd_create(&mut conn, name, comp_formula)
+                    }
+                    Commands::Read { id, search_formula } => {
+                        cmd_read(&mut conn, id, search_formula)
+                    }
                     Commands::Update => println!("Update not implemented"),
                     Commands::Delete => println!("Delete not implemented"),
                     Commands::DeleteAll => {
