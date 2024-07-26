@@ -1,0 +1,6 @@
+name,formula,density,molar_mass,acentric_factor,melting_point,boiling_point,critical_temperature,critical_pressure
+Water,H2O,0.99704702,18.0152833,0.344,0.0,99.63,374.0,221.0
+Ethanol,C2H6O,0.78955,46.069,0.644,-114.5,78.32,241.0,63.0
+Nitrogen,N,1.2506,14.007,0.039,-209.86,-195.795,-146.94,33.9
+Hydrogen,H,0.08988,1.0078,-0.216,-259.16,-252.879,-240.212,12.858
+Ammonia,NH3,0.73,17.031,0.250,-77.73,-33.34,132.4,112.77473
