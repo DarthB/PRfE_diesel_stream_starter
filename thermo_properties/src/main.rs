@@ -11,6 +11,8 @@ use models::Molecule;
 mod models;
 mod schema;
 
+use crate::schema::molecules;
+
 #[derive(Parser)]
 #[command(version, about, long_about=None)]
 struct Cli {
@@ -104,7 +106,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Commands::Read { id, formula } => println!("Delete not implemented"),
                     Commands::Update => println!("Update not implemented"),
                     Commands::Delete => println!("Delete not implemented"),
-                    Commands::DeleteAll => println!("Delete not implemented"),
+                    Commands::DeleteAll => {
+                        diesel::delete(molecules::table).execute(&mut conn)?;
+                    }
                     Commands::Import { csv_path } => println!("Delete not implemented"),
                     Commands::Quit => break,
                 }
