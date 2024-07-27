@@ -1,17 +1,20 @@
 use std::{error::Error, fs::File, path::PathBuf};
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use diesel::{
     query_dsl::methods::{FilterDsl, SelectDsl},
     Connection, ExpressionMethods, PgConnection, RunQueryDsl, SelectableHelper,
 };
-use models::Molecule;
+use models::*;
 
 mod models;
 mod schema;
 
+use crate::schema::molecules as mol_sch;
 use mol_sch::dsl as mol_dsl;
-use schema::molecules as mol_sch;
+
+use crate::schema::antoine_coeff as ant_sch;
+use ant_sch::dsl as ant_dsl;
 
 #[derive(Debug, Parser)]
 struct CliArgs {
@@ -22,7 +25,13 @@ struct CliArgs {
 #[derive(Debug, Clone, Subcommand)]
 enum SubCommands {
     Create,
-    Import,
+    Import {
+        #[arg(short, default_value = "resources/molecules.csv")]
+        csv_path: String,
+
+        #[arg(short)]
+        format: CSVFormats,
+    },
     Read {
         #[arg(short, long, conflicts_with = "formula")]
         id: Option<i32>,
@@ -32,6 +41,14 @@ enum SubCommands {
     },
     Update,
     DeleteAll,
+}
+
+#[derive(Debug, Clone, Default, ValueEnum)]
+enum CSVFormats {
+    #[default]
+    Molecule,
+
+    Antoine,
 }
 
 fn cmd_read(
@@ -70,20 +87,60 @@ fn cmd_read(
     Ok(())
 }
 
-fn cmd_import(path: PathBuf, conn: &mut PgConnection) -> Result<(), Box<dyn Error>> {
+fn cmd_import(
+    path: PathBuf,
+    format: CSVFormats,
+    conn: &mut PgConnection,
+) -> Result<(), Box<dyn Error>> {
     let file = File::open(path)?;
     let mut rdr = csv::Reader::from_reader(file);
-    /*for record in rdr.records() {
-        println!("Record:{:?}", record.unwrap());
-    }*/
-    let records: Vec<Molecule> = rdr
-        .deserialize()
-        .map(|res| res.expect("format error"))
-        .collect();
 
-    diesel::insert_into(mol_dsl::molecules)
-        .values(records)
-        .execute(conn)?;
+    match format {
+        CSVFormats::Molecule => {
+            let records: Vec<Molecule> = rdr
+                .deserialize()
+                .map(|res| res.expect("format error"))
+                .collect();
+
+            diesel::insert_into(mol_dsl::molecules)
+                .values(records)
+                .execute(conn)?;
+        }
+        CSVFormats::Antoine => {
+            /*
+            let records: Vec<Result<AntoineCoeffCSV, csv::Error>> = rdr.deserialize().collect();
+            for (idx, res) in records.iter().enumerate() {
+                match res {
+                    Ok(_) => println!("Row {} read.", idx + 1),
+                    Err(e) => println!("Row {} error: {:?}", idx + 1, e),
+                }
+            }
+            */
+
+            let records: Vec<AntoineCoeffCSV> = rdr
+                .deserialize()
+                .map(|res| res.expect("Erro in csv"))
+                .collect();
+
+            for record in &records {
+                println!("{:?}", record);
+            }
+
+            let records: Vec<AntoineCoeff> = records
+                .into_iter()
+                .map(|el| {
+                    ConnectionAware::new_with_conn(el, conn)
+                        .try_into()
+                        .expect("error in csv")
+                })
+                .collect();
+
+            println!("converted records #{}", records.len());
+            diesel::insert_into(ant_dsl::antoine_coeff)
+                .values(records)
+                .execute(conn)?;
+        }
+    }
 
     Ok(())
 }
@@ -117,11 +174,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match args.sub_command {
         SubCommands::Create => cmd_create("my-mol", "ACDC", &mut conn),
-        SubCommands::Import => {
-            cmd_import("resources/molecules.csv".into(), &mut conn)?;
+        SubCommands::Import { csv_path, format } => {
+            cmd_import(csv_path.into(), format, &mut conn)?;
         }
         SubCommands::Read { id, formula } => {
-            cmd_read(id, formula, &mut conn);
+            cmd_read(id, formula, &mut conn)?;
         }
         SubCommands::Update => todo!(),
         SubCommands::DeleteAll => {

@@ -1,6 +1,18 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    antoine_coeff (id) {
+        id -> Int4,
+        mol_id -> Int4,
+        low_temp -> Float8,
+        max_temp -> Float8,
+        a -> Float8,
+        b -> Float8,
+        c -> Float8,
+    }
+}
+
+diesel::table! {
     molecules (molecule_id) {
         molecule_id -> Int4,
         name -> Text,
@@ -14,3 +26,10 @@ diesel::table! {
         critical_pressure -> Nullable<Float8>,
     }
 }
+
+diesel::joinable!(antoine_coeff -> molecules (mol_id));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    antoine_coeff,
+    molecules,
+);

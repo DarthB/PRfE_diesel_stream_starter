@@ -51,8 +51,8 @@
 			"args": [
 				"--",
 				"import",
-				"-f",
-				"resources/molecules.csv",
+				"-cresources/antoine.csv",
+				"-fantoine"
 			],
 			"problemMatcher": [
 				"$rustc"
