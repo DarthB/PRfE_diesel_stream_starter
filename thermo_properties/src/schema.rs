@@ -3,8 +3,8 @@
 diesel::table! {
     molecules (molecule_id) {
         molecule_id -> Int4,
-        name -> Nullable<Text>,
-        formula -> Nullable<Text>,
+        name -> Text,
+        formula -> Text,
         density -> Nullable<Float8>,
         molar_mass -> Nullable<Float8>,
         acentric_factor -> Nullable<Float8>,

@@ -3,7 +3,19 @@ use serde::Deserialize;
 
 use crate::schema::molecules;
 
-#[derive(Insertable, Debug, Clone, Default, Deserialize)]
+#[derive(
+    Insertable,
+    Selectable,
+    Identifiable,
+    Queryable,
+    QueryableByName,
+    Debug,
+    Clone,
+    Default,
+    Deserialize,
+)]
+#[diesel(primary_key(molecule_id))]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 #[diesel(table_name=molecules)]
 pub struct Molecule {
     #[diesel(skip_insertion)]

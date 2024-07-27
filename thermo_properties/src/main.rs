@@ -1,14 +1,17 @@
 use std::{error::Error, fs::File, path::PathBuf};
 
 use clap::{Parser, Subcommand};
-use diesel::{Connection, PgConnection, RunQueryDsl};
+use diesel::{
+    query_dsl::methods::{FilterDsl, SelectDsl},
+    Connection, ExpressionMethods, PgConnection, RunQueryDsl, SelectableHelper,
+};
 use models::Molecule;
-use serde::Deserialize;
 
 mod models;
 mod schema;
 
-use schema::molecules::dsl as mol_dsl;
+use mol_sch::dsl as mol_dsl;
+use schema::molecules as mol_sch;
 
 #[derive(Debug, Parser)]
 struct CliArgs {
@@ -20,9 +23,51 @@ struct CliArgs {
 enum SubCommands {
     Create,
     Import,
-    Read,
+    Read {
+        #[arg(short, long, conflicts_with = "formula")]
+        id: Option<i32>,
+
+        #[arg(short, long, conflicts_with = "id")]
+        formula: Option<String>,
+    },
     Update,
     DeleteAll,
+}
+
+fn cmd_read(
+    id: Option<i32>,
+    formula: Option<String>,
+    conn: &mut PgConnection,
+) -> Result<(), Box<dyn Error>> {
+    if id.is_some() && formula.is_some() {
+        panic!("called with both")
+    }
+
+    let records = if let Some(id) = id {
+        mol_dsl::molecules
+            .filter(mol_sch::molecule_id.eq(id))
+            .select(Molecule::as_select())
+            .load(conn)?
+    } else if let Some(formula) = formula {
+        mol_dsl::molecules
+            .filter(mol_sch::formula.eq(formula))
+            .select(Molecule::as_select())
+            .load(conn)?
+    } else {
+        // schema::molecules::dsl::*
+        let records: Vec<Molecule> = mol_dsl::molecules
+            .select(Molecule::as_select())
+            .load(conn)?;
+        records
+    };
+
+    // SELECT * FROM molecues
+
+    for record in records {
+        println!("{:?}", record);
+    }
+
+    Ok(())
 }
 
 fn cmd_import(path: PathBuf, conn: &mut PgConnection) -> Result<(), Box<dyn Error>> {
@@ -75,7 +120,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         SubCommands::Import => {
             cmd_import("resources/molecules.csv".into(), &mut conn)?;
         }
-        SubCommands::Read => todo!(),
+        SubCommands::Read { id, formula } => {
+            cmd_read(id, formula, &mut conn);
+        }
         SubCommands::Update => todo!(),
         SubCommands::DeleteAll => {
             diesel::delete(mol_dsl::molecules).execute(&mut conn)?;

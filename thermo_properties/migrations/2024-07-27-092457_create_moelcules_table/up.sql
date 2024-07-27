@@ -1,8 +1,8 @@
 -- Your SQL goes here
 CREATE TABLE molecules (
   molecule_id SERIAL PRIMARY KEY,
-  name TEXT,
-  formula TEXT,
+  name TEXT NOT NULL,
+  formula TEXT NOT NULL,
   density FLOAT NULL,
   molar_mass FLOAT NULL,
   acentric_factor FLOAT NULL,
