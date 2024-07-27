@@ -92,6 +92,8 @@ fn cmd_import(
     format: CSVFormats,
     conn: &mut PgConnection,
 ) -> Result<(), Box<dyn Error>> {
+    println!("csv import from: {:?}", path);
+
     let file = File::open(path)?;
     let mut rdr = csv::Reader::from_reader(file);
 
