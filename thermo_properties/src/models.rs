@@ -1,11 +1,13 @@
 use diesel::prelude::*;
+use serde::Deserialize;
 
 use crate::schema::molecules;
 
-#[derive(Insertable, Debug, Clone, Default)]
+#[derive(Insertable, Debug, Clone, Default, Deserialize)]
 #[diesel(table_name=molecules)]
 pub struct Molecule {
     #[diesel(skip_insertion)]
+    #[serde(skip)]
     pub molecule_id: i32,
 
     pub name: String,
